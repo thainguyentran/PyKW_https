@@ -25,10 +25,8 @@ import urllib
 from collections import namedtuple
 from functools import partial
 
-
-__author__ = "bwinhwang@gmail.com"
+__author__ = 'bwinhwang@gmail.com,ryanshady@gmail.com'
 __all__ = ['KWServer', 'Project']
-
 
 # validate Python version
 if sys.version_info.major != 3:
@@ -48,29 +46,31 @@ class Utils:
             new = str(param)
         return new
 
+
 _User = namedtuple('User', ['name', 'readonly', 'roles', 'groups'])
 
 _Issue = namedtuple("Issue", ['id', 'message', 'file',
-    'method', 'code', 'severity', 'title', 'severityCode', 'state', 'status',
-    'taxonomyName', 'url', 'owner','supportLevel','supportLevelCode', 'dateOriginated',"issueIds"])
+                              'method', 'code', 'severity', 'title', 'severityCode', 'state', 'status',
+                              'taxonomyName', 'url', 'owner', 'supportLevel', 'supportLevelCode', 'dateOriginated',
+                              "issueIds"])
 
 _IssueDetails = namedtuple("IssueDetails", ['id', 'code', 'name', 'location', 'build',
-    'severity', 'owner', 'state', 'status', 'history'], defaults=[''])
+                                            'severity', 'owner', 'state', 'status', 'history'], defaults=[''])
 
 _Metric = namedtuple("Metric", ['filePath', 'entity', 'entity_id', 'tag', 'metricValue'],
-        defaults=[''])
+                     defaults=[''])
 
-_MetricsStatistics = namedtuple("MetricsStatistics",['tag', 'sum', 'min', 'max', 'entries'],
-        defaults=[''])
+_MetricsStatistics = namedtuple("MetricsStatistics", ['tag', 'sum', 'min', 'max', 'entries'],
+                                defaults=[''])
 
 _View = namedtuple("View", ['name', 'creator', 'id', 'query', 'is_public', 'tags'], defaults=[''])
 
-_Build = namedtuple("Build",  ['id', 'name', 'date', 'keepit'])
+_Build = namedtuple("Build", ['id', 'name', 'date', 'keepit', 'tags'])
 
 _Module = namedtuple("Module", ['paths', 'name'])
 
-_Project = namedtuple('Project',  ['server', 'name', 'id', 'creator', 'description', 'tags'],
-            defaults = ['',''])
+_Project = namedtuple('Project', ['server', 'name', 'id', 'creator', 'description', 'tags', 'active', 'state'],
+                      defaults=['', ''])
 
 def _item_from_json(_object, json_object):
     return _object(**json_object)
@@ -104,7 +104,7 @@ class Project(_Project):
         return self.setItems(**data)
 
     def update(self, newname=None, description=None, tags=None,
-            auto_delete_builds=None, auto_delete_threshold=None):
+               auto_delete_builds=None, auto_delete_threshold=None):
 
         data = {'action': 'update_project', 'name': self.name}
         if newname:
@@ -120,7 +120,7 @@ class Project(_Project):
 
         return self.setItems(**data)
 
-    #TODO
+    # TODO
     def getChurnsReport(self, view=None, component=None):
         data = {'action': 'fchurns', 'project': self.name}
 
@@ -224,6 +224,10 @@ class Project(_Project):
                 return build
         return None
 
+    def deleteBuild(self, project, name):
+        data = {'action': 'delete_build', 'project': project, 'name': name}
+        return self.setItems(**data)
+
     def getViews(self):
         try:
             return self._views
@@ -270,9 +274,8 @@ class Project(_Project):
         pass
 
 
-
 class KWServer:
-    def __init__(self, host=None, port=None, user=None,  debug=False):
+    def __init__(self, host=None, port=None, user=None, debug=False):
         self._host = host
         self._port = port
         self._user = user
@@ -280,17 +283,27 @@ class KWServer:
         self._debug = debug
 
     def __str__(self):
-        return "Login as {0} at Klocwork server({3}) http://{1}:{2}".format(
-                self._user, self._host, self._port, self._getVersion())
+        return "Login as {0} at Klocwork server({3}) https://{1}:{2}".format(
+            self._user, self._host, self._port, self._getVersion())
 
     def _user_from_json(self, json_object):
-        if 'readonly' in json_object.keys():
+        if 'readonly' in json_object.keys() and len(json_object) == 4:
             return _User(**json_object)
         else:
             return json_object
 
     def _project_from_json(self, json_object):
-        return Project(server = self, **json_object)
+        data = {
+            'name': '',
+            'id': '',
+            'creator': '',
+            'description': '',
+            'tags': '',
+            'active': True,
+            'state': 'Active'
+        }
+        data.update(json_object)
+        return Project(server=self, **data)
 
     def _gettoken(self, host, port, user):
         ltoken_file = os.path.normpath(os.path.expanduser("~/.klocwork/ltoken"))
@@ -334,11 +347,11 @@ class KWServer:
             return self._version
         except AttributeError:
             versions = json.loads(self.getUrlRsp({'action': 'version'}).read().decode('utf-8'))
-            self._version = versions['majorVersion']+'.'+versions['minorVersion']
+            self._version = versions['majorVersion'] + '.' + versions['minorVersion']
         return self._version
 
     def getUrlRsp(self, data):
-        url = "http://{0}:{1}/review/api".format(self._host, self._port)
+        url = "https://{0}:{1}/review/api".format(self._host, self._port)
         base = {'user': self._user, 'ltoken': self._token}
         base.update(data)
 
@@ -359,7 +372,7 @@ class KWServer:
 
     def getItems(self, json_hook=None, **kwargs):
 
-        url = "http://{0}:{1}/review/api".format(self._host, self._port)
+        url = "https://{0}:{1}/review/api".format(self._host, self._port)
         kwargs.update({'user': self._user, 'ltoken': self._token})
 
         if self._debug:
@@ -379,10 +392,10 @@ class KWServer:
             if self._debug:
                 print(rsp.status)
                 print(rsp.msg)
-                #print(json.dumps(rsp.getheaders(), sort_keys=True, indent=2))
+                # print(json.dumps(rsp.getheaders(), sort_keys=True, indent=2))
 
         except urllib.error.HTTPError as e:
-            #TODO
+            # TODO
             if self._debug:
                 print(e)
             exception = e
@@ -391,7 +404,7 @@ class KWServer:
 
     def setItems(self, **kwargs):
 
-        url = "http://{0}:{1}/review/api".format(self._host, self._port)
+        url = "https://{0}:{1}/review/api".format(self._host, self._port)
         kwargs.update({'user': self._user, 'ltoken': self._token})
 
         if self._debug:
@@ -409,10 +422,10 @@ class KWServer:
             if self._debug:
                 print(rsp.status)
                 print(rsp.msg)
-                #print(json.dumps(rsp.getheaders(), sort_keys=True, indent=2))
+                # print(json.dumps(rsp.getheaders(), sort_keys=True, indent=2))
 
         except urllib.error.HTTPError as e:
-            #TODO
+            # TODO
             if self._debug:
                 print(e)
             exception = e
@@ -428,11 +441,11 @@ class KWServer:
 
         return self._users
 
-    def getProjects(self):
+    def getProjects(self, include_streams=False, include_inactive=False):
         try:
             return self._projects
         except AttributeError:
-            data = {'action': 'projects'}
+            data = {'action': 'projects', 'include_streams': include_streams, 'include_inactive': include_inactive}
             self._projects = self.getItems(self._project_from_json, **data)[1]
         return self._projects
 
@@ -446,7 +459,6 @@ class KWServer:
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--host', help='Klocwork host')
     parser.add_argument('-p', '--port', help='Klocwork port')
