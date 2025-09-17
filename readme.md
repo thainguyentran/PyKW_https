@@ -11,7 +11,22 @@ PyKW is a Python wrapper of Klocwork Web API which gives you the ability to orga
 	```
 	kwauth --url http://example:8080
 	```
+* For secured connection
+* Create a token on the validate portal first, then authenticate with the token
 
+	```
+	kwauth --url https://example:8443 -t
+	```
+* Get the token than can be used by running kwauth again with the -i option
+
+	```
+	kwauth --url https://example:8443 -i
+	```
+* copy the token to your ltoken file. Save it, and now your api can authenticate with validate server
+
+	```
+	<validate_server>;<username>;<token>
+	```
 ### Installing
 
 Just copy klocwork.py file to your workspace
