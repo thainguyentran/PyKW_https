@@ -69,11 +69,14 @@ _Build = namedtuple("Build", ['id', 'name', 'date', 'keepit', 'tags'])
 
 _Module = namedtuple("Module", ['paths', 'name'])
 
-_Project = namedtuple('Project', ['server', 'name', 'id', 'creator', 'description', 'tags', 'active', 'state'],
+_Project = namedtuple('Project',
+                      ['server', 'name', 'id', 'creator', 'description', 'tags', 'active', 'state', 'analysisVersion'],
                       defaults=['', ''])
+
 
 def _item_from_json(_object, json_object):
     return _object(**json_object)
+
 
 class Project(_Project):
 
@@ -91,16 +94,16 @@ class Project(_Project):
 
     def getItems(self, json_hook=None, **kwargs):
 
-        kwargs.update({'project': self.name})
+        kwargs.update({'project': self.id})
         return self.server.getItems(json_hook, **kwargs)[1]
 
     def setItems(self, **kwargs):
 
-        kwargs.update({'project': self.name})
+        kwargs.update({'project': self.id})
         return self.server.setItems(**kwargs)
 
     def delete(self):
-        data = {'action': 'delete_project', 'name': self.name}
+        data = {'action': 'delete_project', 'name': self.id}
         return self.setItems(**data)
 
     def update(self, newname=None, description=None, tags=None,
@@ -114,7 +117,7 @@ class Project(_Project):
         if tags:
             data.update({'tags': Utils.toString(tags)})
         if auto_delete_builds:
-            data.update({'auto_delete_builds': auto_delete_threshold})
+            data.update({'auto_delete_builds': auto_delete_builds})
         if auto_delete_threshold:
             data.update({'auto_delete_threshold': auto_delete_threshold})
 
@@ -228,6 +231,15 @@ class Project(_Project):
         data = {'action': 'delete_build', 'project': project, 'name': name}
         return self.setItems(**data)
 
+    def updateRoleAssignment(self, role_name, project_id, account, group=False, remove=False):
+        data = {'action': 'update_role_assignment',
+                'name': role_name,
+                'project': project_id,
+                'account': account,
+                'group': group,
+                'remove': remove}
+        return self.setItems(**data)
+
     def getViews(self):
         try:
             return self._views
@@ -300,7 +312,8 @@ class KWServer:
             'description': '',
             'tags': '',
             'active': True,
-            'state': 'Active'
+            'state': 'Active',
+            'analysisVersion': ''
         }
         data.update(json_object)
         return Project(server=self, **data)
